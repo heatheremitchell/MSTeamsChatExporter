@@ -104,8 +104,8 @@ $HTMLAttachmentBlock = @"
 
 
 #Script
-Write-Host -ForegroundColor Cyan "`r`nStarting script..."
-Write-Host -ForegroundColor White "`r`nSign in with the Device Code to the app registration:"
+Write-Output -ForegroundColor Cyan "`r`nStarting script..."
+Write-Output -ForegroundColor White "`r`nSign in with the Device Code to the app registration:"
 $tokenOutput = Connect-DeviceCodeAPI $clientId $tenantId $null
 $token = $tokenOutput.access_token
 $refresh_token = $tokenOutput.refresh_token
@@ -123,7 +123,7 @@ $firstChat = Invoke-RestMethod -Method Get -Uri "https://graph.microsoft.com/v1.
 $allChats += $firstChat
 $allChatsCount = $firstChat.'@odata.count' 
 
-Write-Host ("`r`nGetting all chats, please wait... This may take some time.`r`n")
+Write-Output ("`r`nGetting all chats, please wait... This may take some time.`r`n")
 
 if ($null -ne $firstChat.'@odata.nextLink') {
     $chatNextLink = $firstChat.'@odata.nextLink'
@@ -136,7 +136,7 @@ if ($null -ne $firstChat.'@odata.nextLink') {
 }
 
 $chats = $allChats.value | Sort-Object createdDateTime -Descending
-Write-Host ("`r`n" + $chats.count + " possible chat threads found.`r`n")
+Write-Output ("`r`n" + $chats.count + " possible chat threads found.`r`n")
 
 $threadCount = 0
 $StartTime = Get-Date
@@ -177,8 +177,8 @@ foreach ($thread in $chats) {
         $allConversationsCount = $firstConversation.'@odata.count' 
     }
     catch {
-        Write-Host ($name + " :: Could not download historical messages.")
-        Write-Host -ForegroundColor Yellow "Skipping...`r`n"
+        Write-Output ($name + " :: Could not download historical messages.")
+        Write-Output -ForegroundColor Yellow "Skipping...`r`n"
     }
 
     if ($null -ne $firstConversation.'@odata.nextLink') {
@@ -198,7 +198,7 @@ foreach ($thread in $chats) {
 
     if (($conversation.count -gt 0) -and (-not([string]::isNullorEmpty($name)))) {
 
-        Write-Host -ForegroundColor White ($name + " :: " + $allConversationsCount + " messages.")
+        Write-Output -ForegroundColor White ($name + " :: " + $allConversationsCount + " messages.")
         Write-Verbose $conversationUri 
 
         foreach ($message in $conversation) {
@@ -228,7 +228,7 @@ foreach ($thread in $chats) {
                     $imagefile = Join-Path -Path $ImagesFolder -ChildPath "$threadidIO$imagecount.jpg"
                     $imageUri = "https://graph.microsoft.com" + $imgMatch[1]
 
-                    Write-Host "Downloading embedded image in message..."
+                    Write-Output "Downloading embedded image in message..."
                     Write-Verbose $imageUri
 
                     $retries = 0
@@ -308,13 +308,13 @@ foreach ($thread in $chats) {
 
         $file = Join-Path -Path $ExportFolder -ChildPath "$name.html"
         if (Test-Path $file) { $file = ($file -Replace ".html", ( "(" + $threadCount + ")" + ".html")) }
-        Write-Host -ForegroundColor Green "Exporting $file... `r`n"
+        Write-Output -ForegroundColor Green "Exporting $file... `r`n"
         $HTMLfile | Out-File -FilePath $file
     }
     else {
-        Write-Host ($name + " :: No messages found.")
-        Write-Host -ForegroundColor Yellow "Skipping...`r`n"
+        Write-Output ($name + " :: No messages found.")
+        Write-Output -ForegroundColor Yellow "Skipping...`r`n"
     }
 }
 Remove-Item -Path $ImagesFolder -Recurse
-Write-Host -ForegroundColor Cyan "`r`nScript completed... Bye!"
+Write-Output -ForegroundColor Cyan "`r`nScript completed... Bye!"
