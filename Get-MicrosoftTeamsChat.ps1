@@ -32,8 +32,8 @@
 [cmdletbinding()]
 Param(
     [Parameter(Mandatory = $true, HelpMessage = "Export location of where the HTML files will be saved.")] [string] $ExportFolder,
-    [Parameter(Mandatory = $true, HelpMessage = "The client id of the Azure AD App Registration")] [string] $clientId,
-    [Parameter(Mandatory = $true, HelpMessage = "The tenant id of the Azure AD environment the user logs into")] [string] $tenantId,
+    [Parameter(Mandatory = $false, HelpMessage = "The client id of the Azure AD App Registration")] [string] $clientId,
+    [Parameter(Mandatory = $false, HelpMessage = "The tenant id of the Azure AD environment the user logs into")] [string] $tenantId,
     [Parameter(Mandatory = $true, HelpMessage = "The domain name of the UPNs for users in your tenant. E.g. contoso.com")] [string] $domain
 )
 
@@ -98,28 +98,44 @@ $HTMLMessagesBlock_me = @"
 
 $HTMLAttachmentBlock = @"
 <div class="attachment">
-<a href="###ATTACHEMENTURL###" target="_blank">###ATTACHEMENTNAME###</a>
+<a href="###ATTACHMENTURL###" target="_blank">###ATTACHMENTNAME###</a>
 </div>
 "@
 
 
 #Script
 Write-Output -ForegroundColor Cyan "`r`nStarting script..."
-Write-Output -ForegroundColor White "`r`nSign in with the Device Code to the app registration:"
-$tokenOutput = Connect-DeviceCodeAPI $clientId $tenantId $null
-$token = $tokenOutput.access_token
-$refresh_token = $tokenOutput.refresh_token
+if ([string]::IsNullOrEmpty($clientId)) {
+    Write-Output "Using existing MsGraph session..."
+    $authtype = "PSSession"
+}
+else {
+    Write-Output -ForegroundColor White "`r`nSign in with the Device Code to the app registration:"
+    $tokenOutput = Connect-DeviceCodeAPI $clientId $tenantId $null
+    $token = $tokenOutput.access_token
+    $refresh_token = $tokenOutput.refresh_token
+    $accessToken = ConvertTo-SecureString $token -AsPlainText -Force
+    $authtype = "AppReg"
+}
 
 $ImagesFolder = Join-Path -Path $ExportFolder -ChildPath 'images'
 if (-not(Test-Path -Path $ImagesFolder)) { New-Item -ItemType Directory -Path $ImagesFolder | Out-Null }
 $ExportFolder = (Resolve-Path -Path $ExportFolder).ToString()
 
-$accessToken = ConvertTo-SecureString $token -AsPlainText -Force
 
-$me = Invoke-RestMethod -Method Get -Uri "https://graph.microsoft.com/v1.0/me" -Authentication OAuth -Token $accessToken
-
+if ($authtype -eq "PSSession") {
+    $me = Invoke-MgGraphRequest -Method Get "https://graph.microsoft.com/v1.0/me" 
+}
+else {
+    $me = Invoke-RestMethod -Method Get -Uri "https://graph.microsoft.com/v1.0/me" -Authentication OAuth -Token $accessToken
+}
 $allChats = @();
-$firstChat = Invoke-RestMethod -Method Get -Uri "https://graph.microsoft.com/v1.0/me/chats" -Authentication OAuth -Token $accessToken
+if ($authtype -eq "PSSession") {
+    $firstChat = Invoke-MgGraphRequest -Method Get "https://graph.microsoft.com/v1.0/me/chats" 
+}
+else {
+    $firstChat = Invoke-RestMethod -Method Get -Uri "https://graph.microsoft.com/v1.0/me/chats" -Authentication OAuth -Token $accessToken
+}
 $allChats += $firstChat
 $allChatsCount = $firstChat.'@odata.count' 
 
@@ -128,7 +144,12 @@ Write-Output ("`r`nGetting all chats, please wait... This may take some time.`r`
 if ($null -ne $firstChat.'@odata.nextLink') {
     $chatNextLink = $firstChat.'@odata.nextLink'
     do {
-        $chatsToAdd = Invoke-RestMethod -Method Get -Uri $chatNextLink -Authentication OAuth -Token $accessToken
+        if ($authtype -eq "PSSession") {
+            $chatsToAdd = Invoke-MgGraphRequest -Method Get $chatNextLink
+        }
+        else {
+            $chatsToAdd = Invoke-RestMethod -Method Get -Uri $chatNextLink -Authentication OAuth -Token $accessToken
+        }
         $allChats += $chatsToAdd
         $chatNextLink = $chatsToAdd.'@odata.nextLink'
         $allChatsCount = $allChatsCount + $chatsToAdd.'@odata.count'
@@ -148,16 +169,17 @@ foreach ($thread in $chats) {
     $elapsedTime = (Get-Date) - $StartTime
     
     Write-Verbose ("Script running for " + $elapsedTime.TotalSeconds + " seconds.")
-    if ($elapsedTime.TotalMinutes -gt 30) {
-        Write-Host -ForegroundColor Cyan "Reauthenticating with refresh token..."
-        $tokenOutput = Connect-DeviceCodeAPI $clientId $tenantId $refresh_token
-        $token = $tokenOutput.access_token
-        $refresh_token = $tokenOutput.refresh_token
-        $accessToken = ConvertTo-SecureString $token -AsPlainText -Force
-        $StartTime = $(Get-Date)
-        Start-Sleep 5
-    }
-
+    if ($authtype -eq  "AppReg") {
+        if ($elapsedTime.TotalMinutes -gt 30) {
+            Write-Host -ForegroundColor Cyan "Reauthenticating with refresh token..."
+            $tokenOutput = Connect-DeviceCodeAPI $clientId $tenantId $refresh_token
+            $token = $tokenOutput.access_token
+            $refresh_token = $tokenOutput.refresh_token
+            $accessToken = ConvertTo-SecureString $token -AsPlainText -Force
+            $StartTime = $(Get-Date)
+            Start-Sleep 5
+        }
+}
     $name = Get-Random;
 
     if ($null -ne $thread.topic) {
@@ -165,14 +187,24 @@ foreach ($thread in $chats) {
     }
     else {
         $membersUri = "https://graph.microsoft.com/v1.0/me/chats/" + $thread.id + "/members"
-        $members = Invoke-RestMethod -Method Get -Uri $membersUri -Authentication OAuth -Token $accessToken
+        if ($authtype -eq "PSSession") {
+            $members = Invoke-MgGraphRequest -Method Get $membersUri
+        }
+        else {
+            $members = Invoke-RestMethod -Method Get -Uri $membersUri -Authentication OAuth -Token $accessToken
+        }
         $members = $members.value.displayName | Where-Object { $_ -notlike "*@purple.telstra.com" }
         $name = ($members | Where-Object { $_ -notmatch $me.displayName } | Select-Object -Unique) -join ", "
     }
     $allConversations = @();
 
     try {
-        $firstConversation = Invoke-RestMethod -Method Get -Uri $conversationUri -Authentication OAuth -Token $accessToken
+        if ($authtype -eq "PSSession") {
+            $firstConversation = Invoke-MgGraphRequest -Method Get $conversationUri
+        }
+        else {
+            $firstConversation = Invoke-RestMethod -Method Get -Uri $conversationUri -Authentication OAuth -Token $accessToken
+        }
         $allConversations += $firstConversation
         $allConversationsCount = $firstConversation.'@odata.count' 
     }
@@ -184,7 +216,12 @@ foreach ($thread in $chats) {
     if ($null -ne $firstConversation.'@odata.nextLink') {
         $conversationNextLink = $firstConversation.'@odata.nextLink'
         do {
-            $conversationToAdd = Invoke-RestMethod -Method Get -Uri $conversationNextLink -Authentication OAuth -Token $accessToken
+            if ($authtype -eq "PSSession") {
+                $conversationToAdd = Invoke-MgGraphRequest -Method Get $conversationNextLink
+            }
+            else {
+                $conversationToAdd = Invoke-RestMethod -Method Get -Uri $conversationNextLink -Authentication OAuth -Token $accessToken
+            }
             $allConversations += $conversationToAdd
             $conversationNextLink = $conversationToAdd.'@odata.nextLink'
 
@@ -275,8 +312,8 @@ foreach ($thread in $chats) {
 
             if ($null -ne $message.attachment) {
                 $attachmentHTML = $HTMLAttachmentBlock `
-                    -Replace "###ATTACHEMENTURL###", $message.attachment.name`
-                    -Replace "###ATTACHEMENTNAME###", $message.attachment.contentURL`
+                    -Replace "###ATTACHMENTURL###", $message.attachment.name`
+                    -Replace "###ATTACHMENTNAME###", $message.attachment.contentURL`
                     -Replace "###IMAGE###", $pictureURL
 
                 $messagesHTML += $HTMLMessagesBlock `
