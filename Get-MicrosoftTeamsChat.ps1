@@ -11,10 +11,10 @@
         Export location of where the HTML files will be saved. For example, "D:\ExportedHTML\"
 
     .PARAMETER clientId
-        The client id of the Azure AD App Registration. Required only if not using an MSGraph session.
+        The client id of the Azure AD App Registration. Not required if using an Microsoft Graph session.
 
     .PARAMETER tenantId
-        The domain name of the UPNs for users in your tenant. E.g. contoso.com.
+        The domain name of the UPNs for users in your tenant. E.g. contoso.com. Not required if using an Microsoft Graph session.
     
     .PARAMETER domain
         The heritage tenant, Readify or Kloud.
@@ -106,7 +106,18 @@ $HTMLAttachmentBlock = @"
 #Script
 Write-Output -ForegroundColor Cyan "`r`nStarting script..."
 if ([string]::IsNullOrEmpty($clientId)) {
-    Write-Output "Using existing MsGraph session..."
+    Write-Output "Using Microsoft Graph session..."
+    if ([string]::IsNullOrEmpty((Get-MgContext).Account)) {
+        Write-Output -ForegroundColor Cyan "`r`nNot signed in to MgGraph."
+        Write-Output -ForegroundColor White "`r`nLaunching MgGraph sign in..."
+        if (Get-Module -Name Microsoft.Graph.Authentication) {
+            Connect-MgGraph -Scopes "Chat.Read", "User.Read", "User.ReadBasic.All"
+        }
+        else {
+            Write-Output -ForegroundColor Red "`r`nMicrosoft.Graph.Authentication module not found. Please install the Microsoft Graph PowerShell SDK and try again. See https://learn.microsoft.com/en-us/powershell/microsoftgraph/installation?view=graph-powershell-1.0 for directions."
+            Exit
+        }
+    }
     $authtype = "MSGraph"
 }
 else {
@@ -171,7 +182,7 @@ foreach ($thread in $chats) {
     Write-Verbose ("Script running for " + $elapsedTime.TotalSeconds + " seconds.")
     if ($authtype -eq  "AppReg") {
         if ($elapsedTime.TotalMinutes -gt 30) {
-            Write-Host -ForegroundColor Cyan "Reauthenticating with refresh token..."
+            Write-Output -ForegroundColor Cyan "Reauthenticating with refresh token..."
             $tokenOutput = Connect-DeviceCodeAPI $clientId $tenantId $refresh_token
             $token = $tokenOutput.access_token
             $refresh_token = $tokenOutput.refresh_token
