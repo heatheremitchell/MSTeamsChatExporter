@@ -11,7 +11,7 @@
         Export location of where the HTML files will be saved. For example, "D:\ExportedHTML\"
 
     .PARAMETER clientId
-        The client id of the Azure AD App Registration.
+        The client id of the Azure AD App Registration. Required only if not using an MSGraph session.
 
     .PARAMETER tenantId
         The domain name of the UPNs for users in your tenant. E.g. contoso.com.
@@ -107,7 +107,7 @@ $HTMLAttachmentBlock = @"
 Write-Output -ForegroundColor Cyan "`r`nStarting script..."
 if ([string]::IsNullOrEmpty($clientId)) {
     Write-Output "Using existing MsGraph session..."
-    $authtype = "PSSession"
+    $authtype = "MSGraph"
 }
 else {
     Write-Output -ForegroundColor White "`r`nSign in with the Device Code to the app registration:"
@@ -123,14 +123,14 @@ if (-not(Test-Path -Path $ImagesFolder)) { New-Item -ItemType Directory -Path $I
 $ExportFolder = (Resolve-Path -Path $ExportFolder).ToString()
 
 
-if ($authtype -eq "PSSession") {
+if ($authtype -eq "MSGraph") {
     $me = Invoke-MgGraphRequest -Method Get "https://graph.microsoft.com/v1.0/me" 
 }
 else {
     $me = Invoke-RestMethod -Method Get -Uri "https://graph.microsoft.com/v1.0/me" -Authentication OAuth -Token $accessToken
 }
 $allChats = @();
-if ($authtype -eq "PSSession") {
+if ($authtype -eq "MSGraph") {
     $firstChat = Invoke-MgGraphRequest -Method Get "https://graph.microsoft.com/v1.0/me/chats" 
 }
 else {
@@ -144,7 +144,7 @@ Write-Output ("`r`nGetting all chats, please wait... This may take some time.`r`
 if ($null -ne $firstChat.'@odata.nextLink') {
     $chatNextLink = $firstChat.'@odata.nextLink'
     do {
-        if ($authtype -eq "PSSession") {
+        if ($authtype -eq "MSGraph") {
             $chatsToAdd = Invoke-MgGraphRequest -Method Get $chatNextLink
         }
         else {
@@ -187,7 +187,7 @@ foreach ($thread in $chats) {
     }
     else {
         $membersUri = "https://graph.microsoft.com/v1.0/me/chats/" + $thread.id + "/members"
-        if ($authtype -eq "PSSession") {
+        if ($authtype -eq "MSGraph") {
             $members = Invoke-MgGraphRequest -Method Get $membersUri
         }
         else {
@@ -199,7 +199,7 @@ foreach ($thread in $chats) {
     $allConversations = @();
 
     try {
-        if ($authtype -eq "PSSession") {
+        if ($authtype -eq "MSGraph") {
             $firstConversation = Invoke-MgGraphRequest -Method Get $conversationUri
         }
         else {
@@ -216,7 +216,7 @@ foreach ($thread in $chats) {
     if ($null -ne $firstConversation.'@odata.nextLink') {
         $conversationNextLink = $firstConversation.'@odata.nextLink'
         do {
-            if ($authtype -eq "PSSession") {
+            if ($authtype -eq "MSGraph") {
                 $conversationToAdd = Invoke-MgGraphRequest -Method Get $conversationNextLink
             }
             else {
