@@ -142,10 +142,10 @@ else {
 }
 $allChats = @();
 if ($authtype -eq "MSGraph") {
-    $firstChat = Invoke-MgGraphRequest -Method Get "https://graph.microsoft.com/v1.0/me/chats?$Select=id,topic,chatType" 
+    $firstChat = Invoke-MgGraphRequest -Method Get "https://graph.microsoft.com/v1.0/me/chats?`$Select=id,topic,chatType" 
 }
 else {
-    $firstChat = Invoke-RestMethod -Method Get -Uri "https://graph.microsoft.com/v1.0/me/chats?$Select=id,topic,chatType" -Authentication OAuth -Token $accessToken
+    $firstChat = Invoke-RestMethod -Method Get -Uri "https://graph.microsoft.com/v1.0/me/chats?`$Select=id,topic,chatType" -Authentication OAuth -Token $accessToken
 }
 $allChats += $firstChat
 $allChatsCount = $firstChat.'@odata.count' 
@@ -191,6 +191,7 @@ foreach ($thread in $chats) {
             Start-Sleep 5
         }
 }
+# If the thread has a topic, use that as the name of the chat. Otherwise, use the names of the members.
     $name = Get-Random;
 
     if ($null -ne $thread.topic) {
@@ -207,6 +208,7 @@ foreach ($thread in $chats) {
         $members = $members.value.displayName | Where-Object { $_ -notlike "*@purple.telstra.com" }
         $name = ($members | Where-Object { $_ -notmatch $me.displayName } | Select-Object -Unique) -join ", "
     }
+# Ok ladies now let's get conversations    
     $allConversations = @();
 
     try {
@@ -258,7 +260,7 @@ foreach ($thread in $chats) {
                 $userPhotoUPN = (Invoke-MgGraphRequest -Method GET "https://graph.microsoft.com/v1.0/users/$($message.from.user.id)?`$Select=userPrincipalName")["userprincipalname"]
             }
             else {
-                $userPhotoUPN = Invoke-RestMethod -Method Get -Uri "https://graph.microsoft.com/v1.0/users/" + $message.from.user.id + "?`$Select=userPrincipalName" -Authentication OAuth -Token $accessToken
+                $userPhotoUPN = Invoke-RestMethod -Method Get -Uri "https://graph.microsoft.com/v1.0/users/$($message.from.user.id)?`$Select=userPrincipalName" -Authentication OAuth -Token $accessToken
             }
            
             $profilefile = Join-Path -Path $ImagesFolder -ChildPath "$userPhotoUPN.jpg"
