@@ -11,13 +11,13 @@
         Export location of where the HTML files will be saved. For example, "D:\ExportedHTML\"
 
     .PARAMETER clientId
-        The client id of the Azure AD App Registration. Not required if using an Microsoft Graph session.
+        The client id of the Azure AD App Registration. Not required if using a Microsoft Graph session.
 
     .PARAMETER tenantId
-        The domain name of the UPNs for users in your tenant. E.g. contoso.com. Not required if using an Microsoft Graph session.
+        The domain name of the UPNs for users in your tenant. E.g. contoso.com. Not required if using a Microsoft Graph session.
     
     .PARAMETER domain
-        The heritage tenant, Readify or Kloud.
+        The heritage tenant, Readify or Kloud. Not required if using a Microsoft Graph session.
 
 
     .EXAMPLE
@@ -34,7 +34,7 @@ Param(
     [Parameter(Mandatory = $true, HelpMessage = "Export location of where the HTML files will be saved.")] [string] $ExportFolder,
     [Parameter(Mandatory = $false, HelpMessage = "The client id of the Azure AD App Registration")] [string] $clientId,
     [Parameter(Mandatory = $false, HelpMessage = "The tenant id of the Azure AD environment the user logs into")] [string] $tenantId,
-    [Parameter(Mandatory = $true, HelpMessage = "The domain name of the UPNs for users in your tenant. E.g. contoso.com")] [string] $domain
+    [Parameter(Mandatory = $false, HelpMessage = "The domain name of the UPNs for users in your tenant. E.g. contoso.com")] [string] $domain
 )
 
 #################################
