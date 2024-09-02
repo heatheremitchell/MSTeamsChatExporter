@@ -299,7 +299,13 @@ foreach ($thread in $chats) {
                     $completed = $false
                     while (-not $completed) {
                         try {
-                            $response = Invoke-WebRequest -Uri  $imageUri -Authentication OAuth -Token $accessToken
+                            if ($authtype -eq "MSGraph") {
+                                $response = Invoke-MgGraphRequest -Method Get -Uri $imageUri 
+                            }
+                            else {
+                                $response = Invoke-WebRequest -Uri  $imageUri -Authentication OAuth -Token $accessToken
+                            }
+                            
                             Set-Content -Path $imagefile -AsByteStream -Value $response.Content
 
                             $imageencoded = Get-EncodedImage $imagefile
