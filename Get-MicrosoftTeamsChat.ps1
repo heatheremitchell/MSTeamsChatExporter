@@ -255,7 +255,7 @@ foreach ($thread in $chats) {
 
             # Getting the user's UPN via the id in the message works no matter what the display name pattern is.
             if ($authtype -eq "MSGraph") {
-                $userPhotoUPN = (Invoke-MgGraphRequest -Method GET "https://graph.microsoft.com/v1.0/users/" + $message.from.user.id + "?`$Select=userPrincipalName")["userprincipalname"]
+                $userPhotoUPN = (Invoke-MgGraphRequest -Method GET "https://graph.microsoft.com/v1.0/users/$($message.from.user.id)?`$Select=userPrincipalName")["userprincipalname"]
             }
             else {
                 $userPhotoUPN = Invoke-RestMethod -Method Get -Uri "https://graph.microsoft.com/v1.0/users/" + $message.from.user.id + "?`$Select=userPrincipalName" -Authentication OAuth -Token $accessToken
