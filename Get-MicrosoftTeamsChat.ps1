@@ -47,6 +47,7 @@ Import-Module ($PSScriptRoot + "/functions/TelstraPurpleFunctions") -Force
 
 Get-TPASCII
 
+#region Build HTML
 ####################################
 ##   HTML  ##
 ####################################
@@ -101,13 +102,14 @@ $HTMLAttachmentBlock = @"
 <a href="###ATTACHMENTURL###" target="_blank">###ATTACHMENTNAME###</a>
 </div>
 "@
-
+#endregion Build HTML
 
 # Script
+#region Connect
 Write-Output "`r`nStarting script..."
 if ([string]::IsNullOrEmpty($clientId)) {
     Write-Output "`r`nUsing Microsoft Graph session..."
-    if ([string]::IsNullOrEmpty((Get-MgContext).Account)) {
+    While ([string]::IsNullOrEmpty((Get-MgContext).Account)) {
         Write-Warning "`r`nNot signed in to MgGraph."
         Write-Output "`r`nLaunching MgGraph sign in..."
         if (Get-Module -Name Microsoft.Graph.Authentication) {
@@ -128,20 +130,25 @@ else {
     $accessToken = ConvertTo-SecureString $token -AsPlainText -Force
     $authtype = "AppReg"
 }
+#endregion Connect
 
+#region Prep Folders
 $ImagesFolder = Join-Path -Path $ExportFolder -ChildPath 'images'
 if (-not(Test-Path -Path $ImagesFolder)) { New-Item -ItemType Directory -Path $ImagesFolder | Out-Null }
 $ExportFolder = (Resolve-Path -Path $ExportFolder).ToString()
+#endregion Prep Folders
 
-# Get the current user
+#region Get Current User
 if ($authtype -eq "MSGraph") {
     $me = Invoke-MgGraphRequest -Method Get "https://graph.microsoft.com/v1.0/me" 
 }
 else {
     $me = Invoke-RestMethod -Method Get -Uri "https://graph.microsoft.com/v1.0/me" -Authentication OAuth -Token $accessToken
 }
+#endregion Get Current User
 
-#Get the id, topic, chatType, createdDateTime, and lastUpdatedDateTime of the first set of chats
+#region Get Chats
+# Get the id, topic, chatType, createdDateTime, and lastUpdatedDateTime of the first set of chats
 $allChats = @();
 if ($authtype -eq "MSGraph") {
     $firstChat = Invoke-MgGraphRequest -Method Get "https://graph.microsoft.com/v1.0/me/chats?`$Select=id,topic,chatType,createdDateTime,lastUpdatedDateTime" 
@@ -169,6 +176,7 @@ if ($null -ne $firstChat.'@odata.nextLink') {
         $allChatsCount = $allChatsCount + $chatsToAdd.'@odata.count'
     } until ($null -eq $chatsToAdd.'@odata.nextLink' )
 }
+#endregion Get Chats
 
 # Sort the chats by the date they were created
 $chats = $allChats.value | Sort-Object createdDateTime -Descending
@@ -177,7 +185,7 @@ Write-Output ("`r`n" + $chats.count + " possible chat threads found.`r`n")
 $threadCount = 0
 $StartTime = Get-Date
 
-# Loop through each chat thread
+
 foreach ($thread in $chats) {
     
     # 50 is the maximum allowed with the beta api
@@ -186,7 +194,9 @@ foreach ($thread in $chats) {
     $elapsedTime = (Get-Date) - $StartTime
     
     Write-Verbose ("Script running for " + $elapsedTime.TotalSeconds + " seconds.")
+    
     # Refresh token every 30 minutes if using app registration
+    #region Token Refresh
     if ($authtype -eq  "AppReg") {
         if ($elapsedTime.TotalMinutes -gt 30) {
             Write-Host -ForegroundColor Cyan "Reauthenticating with refresh token..."
@@ -197,8 +207,11 @@ foreach ($thread in $chats) {
             $StartTime = $(Get-Date)
             Start-Sleep 5
         }
-}
-# If the thread has a topic, use that as the name of the chat. Otherwise, use the names of the members.
+    }
+    #endregion Token Refresh
+
+    # If the thread has a topic, use that as the name of the chat. Otherwise, use the names of the members.
+    #region Set Chat Name
     $name = Get-Random;
 
     if ($null -ne $thread.topic) {
@@ -217,9 +230,11 @@ foreach ($thread in $chats) {
         $name = ($members | Where-Object { $_ -notmatch $me.displayName } | Select-Object -Unique) -join ", "
         
     }
-# Ok ladies now let's get conversations    
-    $allConversations = @();
+    #endregion Set Chat Name
 
+    # Ok ladies now let's get conversations    
+    $allConversations = @();
+    #region Get Messages
     try {
         if ($authtype -eq "MSGraph") {
             $firstConversation = Invoke-MgGraphRequest -Method Get $conversationUri
@@ -250,11 +265,12 @@ foreach ($thread in $chats) {
             $allConversationsCount = $allConversationsCount + $conversationToAdd.'@odata.count'
         } until ($null -eq $conversationToAdd.'@odata.nextLink')
     }
+    #endregion Get Messages
 
     $conversation = $allConversations.value | Sort-Object createdDateTime 
     $threadCount++
     $messagesHTML = $null
-# Loop through each message in the conversation
+      
     if (($conversation.count -gt 0) -and (-not([string]::isNullorEmpty($name)))) {
 
         Write-Host -ForegroundColor White ($name + " :: " + $allConversationsCount + " messages.")
@@ -331,7 +347,6 @@ foreach ($thread in $chats) {
                             $imageencoded = Get-EncodedImage $imagefile
                             $messageBody = $messageBody.Replace($imgMatch[0], ("<a href=`"" + $imageencoded + "`" download>" + $imgMatch[0] + "</a>"))
                             $messageBody = $messageBody.Replace($imageUri, $imageencoded)
-
                             
                             $completed = $true
                         }
@@ -401,9 +416,13 @@ foreach ($thread in $chats) {
         Write-Host -ForegroundColor Green "Exporting $file... `r`n"
         $HTMLfile | Out-File -FilePath $file
         
-        # Enter the thread info to the master chat list
+        # Enter the thread info to the CSV chat list
+        # Export to CSV barfs if the value for topic is null. So we need to check for and fix that, maybe by replacing it with the name generated above, although we'd need to be sure that was populated too.
+        if ($null -eq $thread.topic) {
+            $thread.topic = $name
+        }
         $thread | Export-Csv "$ExportFolder\ChatThreads.csv" -NoTypeInformation -Append
-        
+        Write-output $thread
     }
     else {
         Write-Output "$name :: No messages found."
